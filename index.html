@@ -2,197 +2,265 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport"
-        content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<meta name="viewport"
+      content="width=device-width,initial-scale=1">
+<title>台灣地形 AR 探索</title>
 
-  <title>台灣地形 AR 探索</title>
+<script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
-  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+<style>
+* { box-sizing: border-box; }
 
-  <style>
-    body {
-      margin: 0;
-      overflow: hidden;
-      font-family: "Microsoft JhengHei", sans-serif;
-    }
+body {
+  margin: 0;
+  overflow: hidden;
+  font-family: "Microsoft JhengHei", sans-serif;
+}
 
-    #header {
-      position: fixed;
-      top: 15px;
-      left: 5%;
-      width: 90%;
-      box-sizing: border-box;
-      padding: 15px;
-      border-radius: 15px;
-      background: rgba(9,23,37,.85);
-      color: white;
-      text-align: center;
-      z-index: 1000;
-      pointer-events: none;
-    }
+.panel {
+  position: fixed;
+  left: 5%;
+  width: 90%;
+  padding: 15px;
+  border-radius: 16px;
+  background: rgba(9,23,37,.88);
+  color: white;
+  text-align: center;
+  z-index: 1000;
+}
 
-    #header h2 {
-      margin: 0 0 8px;
-      color: #92e4f3;
-    }
+#header { top: 15px; }
+#footer { bottom: 20px; }
 
-    #status {
-      font-size: 14px;
-      line-height: 1.6;
-    }
+h2 {
+  margin: 0 0 8px;
+  color: #92e4f3;
+}
 
-    #info {
-      position: fixed;
-      bottom: 20px;
-      left: 5%;
-      width: 90%;
-      box-sizing: border-box;
-      padding: 15px;
-      border-radius: 15px;
-      background: rgba(9,23,37,.85);
-      color: white;
-      text-align: center;
-      z-index: 1000;
-      pointer-events: none;
-    }
+#status, #debug {
+  font-size: 13px;
+  line-height: 1.6;
+}
 
-    #info p {
-      margin: 8px 0;
-      font-size: 14px;
-    }
-  </style>
+#debug { color: #9bd9c8; }
+
+button {
+  border: 1px solid #92e4f3;
+  background: #173e50;
+  color: white;
+  border-radius: 10px;
+  padding: 10px 18px;
+  margin: 5px;
+  font-size: 16px;
+}
+
+#controls {
+  margin-top: 8px;
+}
+</style>
+
+<script>
+// 在模型載入後，依實際尺寸重新置中及縮放
+AFRAME.registerComponent('fit-taiwan', {
+  init: function () {
+    this.el.addEventListener('model-loaded', () => {
+      const THREE = AFRAME.THREE;
+      const model = this.el.getObject3D('mesh');
+
+      if (!model) return;
+
+      model.position.set(0, 0, 0);
+      model.scale.set(1, 1, 1);
+      model.updateMatrixWorld(true);
+
+      const box = new THREE.Box3().setFromObject(model);
+
+      const size = new THREE.Vector3();
+      const center = new THREE.Vector3();
+
+      box.getSize(size);
+      box.getCenter(center);
+
+      const maxSize = Math.max(
+        size.x, size.y, size.z
+      );
+
+      if (!Number.isFinite(maxSize) || maxSize <= 0) {
+        document.getElementById('status').textContent =
+          '模型尺寸異常，請檢查 GLB';
+        return;
+      }
+
+      // 最長邊固定為 AR 圖卡座標的 0.4 單位
+      const normalizedScale = 0.4 / maxSize;
+
+      // 同時縮放幾何與中心偏移
+      model.scale.setScalar(normalizedScale);
+      model.position.set(
+        -center.x * normalizedScale,
+        -center.y * normalizedScale,
+        -center.z * normalizedScale
+      );
+
+      model.updateMatrixWorld(true);
+
+      window.terrainModel = model;
+      window.baseScale = normalizedScale;
+      window.currentFactor = 1;
+
+      document.getElementById('debug').textContent =
+        '模型尺寸：' +
+        size.x.toFixed(1) + ' × ' +
+        size.y.toFixed(1) + ' × ' +
+        size.z.toFixed(1);
+
+      document.getElementById('status').textContent =
+        '模型已載入，請掃描圖卡';
+
+      console.log('模型尺寸', size);
+      console.log('模型中心', center);
+      console.log('縮放倍率', normalizedScale);
+    });
+  }
+});
+
+function resizeTerrain(factor) {
+  if (!window.terrainModel) return;
+
+  window.currentFactor *= factor;
+
+  window.currentFactor = Math.max(
+    0.01,
+    Math.min(5, window.currentFactor)
+  );
+
+  const scale =
+    window.baseScale * window.currentFactor;
+
+  window.terrainModel.scale.setScalar(scale);
+
+  // 重新依縮放倍率計算置中位置
+  const model = window.terrainModel;
+  const center = window.originalCenter;
+
+  if (center) {
+    model.position.set(
+      -center.x * scale,
+      -center.y * scale,
+      -center.z * scale
+    );
+  }
+
+  document.getElementById('ratio').textContent =
+    Math.round(window.currentFactor * 100) + '%';
+}
+</script>
 </head>
 
 <body>
 
-  <div id="header">
-    <h2>台灣地形 AR 探索</h2>
-    <div id="status">
-      正在啟動攝影機...
-    </div>
+<div class="panel" id="header">
+  <h2>台灣地形 AR 探索</h2>
+  <div id="status">正在載入模型...</div>
+  <div id="debug"></div>
+</div>
+
+<div class="panel" id="footer">
+  <strong>台灣地形觀察任務</strong>
+  <p>觀察山地、丘陵、平原與海岸。</p>
+
+  <div id="controls">
+    <button onclick="resizeTerrain(0.5)">
+      − 縮小
+    </button>
+
+    <span id="ratio">100%</span>
+
+    <button onclick="resizeTerrain(2)">
+      ＋ 放大
+    </button>
   </div>
+</div>
 
-  <div id="info">
-    <strong>觀察任務</strong>
-    <p id="description">
-      請將手機鏡頭對準台灣地形辨識圖卡。
-    </p>
-  </div>
+<a-scene
+  mindar-image="imageTargetSrc: ./targets.mind;
+                autoStart: true;
+                maxTrack: 1;"
+  color-space="sRGB"
+  renderer="colorManagement: true"
+  vr-mode-ui="enabled: false"
+  device-orientation-permission-ui="enabled: false">
 
-  <a-scene
-    mindar-image="imageTargetSrc: ./targets.mind;
-                  autoStart: true;
-                  maxTrack: 1;"
-    color-space="sRGB"
-    renderer="colorManagement: true;
-              physicallyCorrectLights: true"
-    vr-mode-ui="enabled: false"
-    device-orientation-permission-ui="enabled: false">
+  <a-assets>
+    <a-asset-item
+      id="terrainAsset"
+      src="./terrain.glb">
+    </a-asset-item>
+  </a-assets>
 
-    <a-assets>
-      <a-asset-item
-        id="terrain"
-        src="./terrain.glb">
-      </a-asset-item>
-    </a-assets>
+  <a-camera
+    position="0 0 0"
+    look-controls="enabled: false">
+  </a-camera>
 
-    <a-camera
-      position="0 0 0"
-      look-controls="enabled: false">
-    </a-camera>
+  <a-entity
+    id="target"
+    mindar-image-target="targetIndex: 0">
 
     <a-entity
-      id="target"
-      mindar-image-target="targetIndex: 0">
-
-
-    <a-entity
-      id="terrainModel"
-      gltf-model="#terrain"
-      auto-fit-terrain
+      id="taiwan"
+      gltf-model="#terrainAsset"
+      fit-taiwan
       position="0 0 0.05">
     </a-entity>
 
+  </a-entity>
+</a-scene>
 
-    </a-entity>
+<script>
+const target = document.querySelector('#target');
 
-  </a-scene>
+target.addEventListener('targetFound', () => {
+  document.getElementById('status').textContent =
+    '✓ AR 辨識成功！';
+});
 
-  <script>
-    const target = document.querySelector('#target');
+target.addEventListener('targetLost', () => {
+  document.getElementById('status').textContent =
+    '請重新對準圖卡';
+});
 
-    const status = document.querySelector('#status');
-    const description = document.querySelector('#description');
+document.querySelector('#taiwan')
+  .addEventListener('model-loaded', () => {
 
-    target.addEventListener('targetFound', () => {
-      status.textContent = '✓ AR 辨識成功！';
-      description.textContent =
-        '觀察台灣的山地、丘陵、平原與海岸地形。';
-    });
+    const model = document.querySelector('#taiwan')
+      .getObject3D('mesh');
 
-    target.addEventListener('targetLost', () => {
-      status.textContent = '正在尋找 AR 圖卡...';
-      description.textContent =
-        '請將手機鏡頭重新對準台灣地形辨識圖卡。';
-    });
+    if (!model) return;
 
-    const scene = document.querySelector('a-scene');
+    // 供放大縮小按鈕使用
+    const box = new AFRAME.THREE.Box3()
+      .setFromObject(model);
 
-    scene.addEventListener('arReady', () => {
-      status.textContent = '攝影機已啟動，請掃描圖卡。';
-    });
+    const center = new AFRAME.THREE.Vector3();
+    box.getCenter(center);
 
-    scene.addEventListener('arError', () => {
-      status.textContent =
-        'AR 啟動失敗，請檢查攝影機權限。';
-    });
-  </script>
+    // 此時模型已被縮放，因此從幾何重新取得
+    const originalBox = new AFRAME.THREE.Box3();
+    const clone = model.clone();
+    clone.position.set(0, 0, 0);
+    clone.scale.set(1, 1, 1);
+    clone.updateMatrixWorld(true);
+    originalBox.setFromObject(clone);
 
-  <script>
-  AFRAME.registerComponent('auto-fit-terrain', {
-    init: function () {
-      this.el.addEventListener('model-loaded', () => {
-        const THREE = AFRAME.THREE;
-        const model = this.el.getObject3D('mesh');
-  
-        if (!model) return;
-  
-        // 取得模型原始尺寸
-        const box = new THREE.Box3().setFromObject(model);
-        const size = new THREE.Vector3();
-        const center = new THREE.Vector3();
-  
-        box.getSize(size);
-        box.getCenter(center);
-  
-        // 以最長邊為基準，自動縮放
-        const maxDimension = Math.max(
-          size.x,
-          size.y,
-          size.z
-        );
-  
-        if (!Number.isFinite(maxDimension) ||
-            maxDimension <= 0) return;
-  
-        // 模型最長邊控制在圖卡寬度約 70%
-        const targetSize = 0.7;
-        const scale = targetSize / maxDimension;
-  
-        // 將模型幾何中心移到原點
-        model.position.sub(center);
-  
-        // 套用統一縮放
-        this.el.object3D.scale.setScalar(scale);
-  
-        console.log('模型原始尺寸：', size);
-        console.log('自動縮放倍率：', scale);
-      });
-    }
+    window.originalCenter =
+      originalBox.getCenter(
+        new AFRAME.THREE.Vector3()
+      );
   });
-  </script>
+</script>
 
 </body>
 </html>
