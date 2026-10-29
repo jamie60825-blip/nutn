@@ -107,12 +107,14 @@
       id="target"
       mindar-image-target="targetIndex: 0">
 
-    <a-gltf-model
-      src="#terrain"
-      position="0 0 0.1"
-      rotation="0 0 0"
-      scale="0.005 0.005 0.005">
-    </a-gltf-model>
+
+    <a-entity
+      id="terrainModel"
+      gltf-model="#terrain"
+      auto-fit-terrain
+      position="0 0 0.05">
+    </a-entity>
+
 
     </a-entity>
 
@@ -146,6 +148,50 @@
       status.textContent =
         'AR 啟動失敗，請檢查攝影機權限。';
     });
+  </script>
+
+  <script>
+  AFRAME.registerComponent('auto-fit-terrain', {
+    init: function () {
+      this.el.addEventListener('model-loaded', () => {
+        const THREE = AFRAME.THREE;
+        const model = this.el.getObject3D('mesh');
+  
+        if (!model) return;
+  
+        // 取得模型原始尺寸
+        const box = new THREE.Box3().setFromObject(model);
+        const size = new THREE.Vector3();
+        const center = new THREE.Vector3();
+  
+        box.getSize(size);
+        box.getCenter(center);
+  
+        // 以最長邊為基準，自動縮放
+        const maxDimension = Math.max(
+          size.x,
+          size.y,
+          size.z
+        );
+  
+        if (!Number.isFinite(maxDimension) ||
+            maxDimension <= 0) return;
+  
+        // 模型最長邊控制在圖卡寬度約 70%
+        const targetSize = 0.7;
+        const scale = targetSize / maxDimension;
+  
+        // 將模型幾何中心移到原點
+        model.position.sub(center);
+  
+        // 套用統一縮放
+        this.el.object3D.scale.setScalar(scale);
+  
+        console.log('模型原始尺寸：', size);
+        console.log('自動縮放倍率：', scale);
+      });
+    }
+  });
   </script>
 
 </body>
