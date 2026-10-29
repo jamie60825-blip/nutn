@@ -5,37 +5,148 @@
   <meta charset="UTF-8">
   <meta name="viewport"
         content="width=device-width, initial-scale=1">
-  <title>EXPLORE AR</title>
+
+  <title>台灣地形 AR 探索</title>
+
+  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
   <style>
     body {
       margin: 0;
-      min-height: 100vh;
-      background: linear-gradient(135deg,#091725,#1d4861);
-      color: white;
+      overflow: hidden;
       font-family: "Microsoft JhengHei", sans-serif;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+    }
+
+    #header {
+      position: fixed;
+      top: 15px;
+      left: 5%;
+      width: 90%;
+      box-sizing: border-box;
+      padding: 15px;
+      border-radius: 15px;
+      background: rgba(9,23,37,.85);
+      color: white;
       text-align: center;
+      z-index: 1000;
+      pointer-events: none;
     }
-    .card {
-      width: 85%;
-      max-width: 500px;
-      padding: 35px 20px;
-      background: #142b40;
-      border: 1px solid #4a7890;
-      border-radius: 20px;
+
+    #header h2 {
+      margin: 0 0 8px;
+      color: #92e4f3;
     }
-    h1 { color: #92e4f3; }
-    p { line-height: 1.8; color: #bed0df; }
+
+    #status {
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    #info {
+      position: fixed;
+      bottom: 20px;
+      left: 5%;
+      width: 90%;
+      box-sizing: border-box;
+      padding: 15px;
+      border-radius: 15px;
+      background: rgba(9,23,37,.85);
+      color: white;
+      text-align: center;
+      z-index: 1000;
+      pointer-events: none;
+    }
+
+    #info p {
+      margin: 8px 0;
+      font-size: 14px;
+    }
   </style>
 </head>
+
 <body>
-  <div class="card">
-    <h1>EXPLORE AR</h1>
-    <h2>AR 實境探索教室</h2>
-    <p>網站部署成功！</p>
-    <p>下一步將加入手機攝影機、圖片辨識與 3D 模型。</p>
+
+  <div id="header">
+    <h2>台灣地形 AR 探索</h2>
+    <div id="status">
+      正在啟動攝影機...
+    </div>
   </div>
+
+  <div id="info">
+    <strong>觀察任務</strong>
+    <p id="description">
+      請將手機鏡頭對準台灣地形辨識圖卡。
+    </p>
+  </div>
+
+  <a-scene
+    mindar-image="imageTargetSrc: ./targets.mind;
+                  autoStart: true;
+                  maxTrack: 1;"
+    color-space="sRGB"
+    renderer="colorManagement: true;
+              physicallyCorrectLights: true"
+    vr-mode-ui="enabled: false"
+    device-orientation-permission-ui="enabled: false">
+
+    <a-assets>
+      <a-asset-item
+        id="terrain"
+        src="./terrain.glb">
+      </a-asset-item>
+    </a-assets>
+
+    <a-camera
+      position="0 0 0"
+      look-controls="enabled: false">
+    </a-camera>
+
+    <a-entity
+      id="target"
+      mindar-image-target="targetIndex: 0">
+
+      <a-gltf-model
+        src="#terrain"
+        position="0 0 0.1"
+        rotation="0 0 0"
+        scale="0.2 0.2 0.2">
+      </a-gltf-model>
+
+    </a-entity>
+
+  </a-scene>
+
+  <script>
+    const target = document.querySelector('#target');
+
+    const status = document.querySelector('#status');
+    const description = document.querySelector('#description');
+
+    target.addEventListener('targetFound', () => {
+      status.textContent = '✓ AR 辨識成功！';
+      description.textContent =
+        '觀察台灣的山地、丘陵、平原與海岸地形。';
+    });
+
+    target.addEventListener('targetLost', () => {
+      status.textContent = '正在尋找 AR 圖卡...';
+      description.textContent =
+        '請將手機鏡頭重新對準台灣地形辨識圖卡。';
+    });
+
+    const scene = document.querySelector('a-scene');
+
+    scene.addEventListener('arReady', () => {
+      status.textContent = '攝影機已啟動，請掃描圖卡。';
+    });
+
+    scene.addEventListener('arError', () => {
+      status.textContent =
+        'AR 啟動失敗，請檢查攝影機權限。';
+    });
+  </script>
+
 </body>
 </html>
